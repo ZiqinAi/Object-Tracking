@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实时目标跟踪系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .card h2 {
+            color: #5a67d8;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px dashed #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+
+        .video-container.active {
+            border: 2px solid #28a745;
+        }
+
+        #cameraStream, #videoPreview {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        
+        #videoPreviewForSelection { /* Added for video frame selection */
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 8px;
+            display: none; /* Initially hidden */
+        }
+
+
+        .placeholder {
+            text-align: center;
+            color: #6c757d;
+            font-size: 1.1em;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(45deg, #56ab2f, #a8e6cf);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, #ff416c, #ff4b2b);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .status-panel {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .status-label {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .status-value {
+            color: #28a745;
+            font-weight: 600;
+        }
+
+        .status-value.error {
+            color: #dc3545;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .selection-area {
+            position: absolute;
+            border: 2px solid #28a745;
+            background: rgba(40, 167, 69, 0.2);
+            pointer-events: none; /* Will be handled by JS */
+            display: none;
+        }
+
+        .algorithm-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .algorithm-card {
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .algorithm-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .algorithm-card.selected {
+            border-color: #28a745;
+            background: rgba(40, 167, 69, 0.1);
+        }
+
+        .algorithm-name {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+
+        .algorithm-speed {
+            font-size: 12px;
+            color: #6c757d;
+        }
+
+        .log-container {
+            background: #2d3748;
+            color: #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        .log-info {
+            color: #63b3ed;
+        }
+
+        .log-success {
+            color: #68d391;
+        }
+
+        .log-error {
+            color: #feb2b2;
+            background: rgba(254, 178, 178, 0.1);
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            z-index: 1000;
+            transform: translateX(120%); /* Adjusted for smoother exit */
+            opacity: 0;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .toast.success {
+            background: #28a745;
+        }
+
+        .toast.error {
+            background: #dc3545;
+        }
+
+         .toast.info {
+            background: #17a2b8;
+        }
+
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        .icon {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 实时目标跟踪系统</h1>
+            <p>支持摄像头实时跟踪和视频文件处理</p>
+        </div>
+
+        <div class="main-content">
+            <div class="card">
+                <h2>
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path d="M17,9H7V7a3,3,0,0,1,6,0v1h4V7a7,7,0,0,0-14,0V9a3,3,0,0,0-3,3v7a3,3,0,0,0,3,3H17a3,3,0,0,0,3-3V12A3,3,0,0,0,17,9Z"/>
+                    </svg>
+                    实时摄像头跟踪
+                </h2>
+                
+                <div class="video-container" id="cameraFeedContainer"> <img id="cameraStream" style="display: none;" />
+                    <div class="placeholder" id="cameraPlaceholder">
+                        <svg class="icon" style="width: 64px; height: 64px; margin-bottom: 10px;" viewBox="0 0 24 24">
+                            <path d="M17,9V7A5,5,0,0,0,7,7V9a3,3,0,0,0-3,3v7a3,3,0,0,0,3,3H17a3,3,0,0,0,3-3V12A3,3,0,0,0,17,9ZM9,7a3,3,0,0,1,6,0V9H9Zm9,13H6V12H18Z"/>
+                        </svg>
+                        <div>点击启动摄像头开始实时跟踪</div>
+                    </div>
+                    <div class="selection-area" id="cameraSelectionArea"></div>
+                </div>
+
+                <div class="controls">
+                    <button class="btn btn-primary" id="startCameraBtn">
+                        <svg class="icon" viewBox="0 0 24 24">
+                            <path d="M14,6l2.5,2.5L14,11V8.5H10v-1H14V6 M4,6H2v14c0,1.1,0.9,2,2,2h14v-2H4V6z M20,2H8C6.9,2,6,2.9,6,4v12c0,1.1,0.9,2,2,2h12c1.1,0,2-0.9,2-2V4C22,2.9,21.1,2,20,2z"/>
+                        </svg>
+                        启动摄像头
+                    </button>
+                    <button class="btn btn-success" id="startCameraTrackingBtn" disabled> <svg class="icon" viewBox="0 0 24 24">
+                            <path d="M12,2A10,10,0,1,0,22,12,10,10,0,0,0,12,2Zm5.4,8.5L11,16.9a1.4,1.4,0,0,1-2,0L6.6,14.5a1.4,1.4,0,0,1,0-2,1.4,1.4,0,0,1,2,0L10,14.1l5.4-5.4a1.4,1.4,0,0,1,2,0A1.4,1.4,0,0,1,17.4,10.5Z"/>
+                        </svg>
+                        开始跟踪
+                    </button>
+                    <button class="btn btn-danger" id="stopCameraTrackingBtn" disabled> <svg class="icon" viewBox="0 0 24 24">
+                            <path d="M12,2A10,10,0,1,0,22,12,10,10,0,0,0,12,2ZM16,14H8V10h8Z"/>
+                        </svg>
+                        停止跟踪
+                    </button>
+                    <button class="btn btn-secondary" id="stopCameraBtn" disabled>
+                        <svg class="icon" viewBox="0 0 24 24">
+                            <path d="M20,4H16L14,2H10L8,4H4A2,2,0,0,0,2,6V18a2,2,0,0,0,2,2H20a2,2,0,0,0,2-2V6A2,2,0,0,0,20,4ZM20,18H4V6H8.8L10.8,4h2.4L15.2,6H20Z"/>
+                        </svg>
+                        关闭摄像头
+                    </button>
+                </div>
+
+                <div class="status-panel">
+                    <div class="status-item">
+                        <span class="status-label">摄像头状态:</span>
+                        <span class="status-value" id="cameraStatus">未启动</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">跟踪状态:</span>
+                        <span class="status-value" id="cameraTrackingStatus">未跟踪</span>  </div>
+                    <div class="status-item">
+                        <span class="status-label">当前算法:</span>
+                        <span class="status-value" id="currentAlgorithmCamera">KCF</span> </div>
+                    <div class="status-item">
+                        <span class="status-label">跟踪目标:</span>
+                        <span class="status-value" id="cameraTargetInfo">未选择</span> </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path d="M18,4H6A2,2,0,0,0,4,6V18a2,2,0,0,0,2,2H18a2,2,0,0,0,2-2V6A2,2,0,0,0,18,4ZM18,18H6V6H18ZM8,15.5l2.5-1.5L16,17V7L10.5,10,8,8.5Z"/>
+                    </svg>
+                    视频文件跟踪
+                </h2>
+
+                <div class="form-group">
+                    <label>上传视频文件:</label>
+                    <input type="file" class="form-control" id="videoFileInput" accept="video/*">
+                </div>
+
+                <div class="video-container" id="videoPlayerContainer"> <video id="videoPreview" controls style="display: none;"></video>
+                    <img id="videoPreviewForSelection" /> <div class="placeholder" id="videoPlaceholder">
+                        <svg class="icon" style="width: 64px; height: 64px; margin-bottom: 10px;" viewBox="0 0 24 24">
+                            <path d="M18,4H6A2,2,0,0,0,4,6V18a2,2,0,0,0,2,2H18a2,2,0,0,0,2-2V6A2,2,0,0,0,18,4ZM18,18H6V6H18ZM8,15.5l2.5-1.5L16,17V7L10.5,10,8,8.5Z"/>
+                        </svg>
+                        <div>选择视频文件开始处理</div>
+                    </div>
+                    <div class="selection-area" id="videoSelectionArea"></div> </div>
+
+
+                <div class="controls">
+                     <button class="btn btn-primary" id="extractFrameBtn" disabled>
+                        <svg class="icon" viewBox="0 0 24 24">
+                            <path d="M19,3H5A2,2,0,0,0,3,5V19a2,2,0,0,0,2,2H19a2,2,0,0,0,2-2V5A2,2,0,0,0,19,3ZM19,19H5V5H19ZM13.96,12.29l-2.75,3.54L8.5,13.08a1,1,0,0,0-1.66.51L6,18H18l-2.96-4.29A1,1,0,0,0,13.96,12.29Z"/>
+                        </svg>
+                        提取帧选择目标
+                    </button>
+                    <button class="btn btn-success" id="startVideoProcessingBtn" disabled> <svg class="icon" viewBox="0 0 24 24">
+                            <path d="M8,5V19l11-7Z"/>
+                        </svg>
+                        开始处理
+                    </button>
+                    <button class="btn btn-secondary" id="downloadResultBtn" disabled>
+                        <svg class="icon" viewBox="0 0 24 24">
+                            <path d="M5,20H19V18H5M19,9H15V3H9V9H5l7,7Z"/>
+                        </svg>
+                        下载结果
+                    </button>
+                </div>
+                 <div class="status-panel"> <div class="status-item">
+                        <span class="status-label">视频状态:</span>
+                        <span class="status-value" id="videoFileStatus">未上传</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">当前算法:</span>
+                        <span class="status-value" id="currentAlgorithmVideo">KCF</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">跟踪目标:</span>
+                        <span class="status-value" id="videoTargetInfo">未选择</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">处理进度:</span>
+                        <span class="status-value" id="videoProgressText">0%</span>
+                    </div>
+                </div>
+                <div class="progress-bar" id="videoProgressContainer" style="display: none;"> <div class="progress-fill" id="videoProgressFill"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M12,2A10,10,0,1,0,22,12,10,10,0,0,0,12,2ZM12,20a8,8,0,1,1,8-8A8,8,0,0,1,12,20ZM12,6a1.5,1.5,0,1,1-1.5,1.5A1.5,1.5,0,0,1,12,6Zm0,4a1,1,0,0,0-1,1v6a1,1,0,0,0,2,0V11A1,1,0,0,0,12,10Z"/>
+                </svg>
+                算法选择与系统日志
+            </h2>
+
+            <div class="form-group">
+                <label>选择跟踪算法:</label>
+                <div class="algorithm-grid" id="algorithmGrid">
+                    </div>
+            </div>
+
+            <div class="form-group">
+                <label>系统日志:</label>
+                <div class="log-container" id="logContainer">
+                    <div class="log-entry log-info">[INFO] 系统已启动，等待操作...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // 全局变量
+        let cameraSessionId = null;
+        let videoProcessingTaskId = null; // Renamed
+        let selectedAlgorithm = 'kcf'; // Default algorithm
+        
+        let cameraBBox = null; // For storing camera ROI
+        let videoBBox = null;   // For storing video ROI
+
+        let uploadedVideoInfo = null;
+        let isSelectingMode = null; // 'camera' or 'video' or null
+
+        // API基础URL
+        const API_BASE = 'http://localhost:5000/api';
+
+        // DOM Elements
+        const cameraStreamImg = document.getElementById('cameraStream');
+        const cameraPlaceholderDiv = document.getElementById('cameraPlaceholder');
+        const startCameraBtn = document.getElementById('startCameraBtn');
+        const stopCameraBtn = document.getElementById('stopCameraBtn');
+        const startCameraTrackingBtn = document.getElementById('startCameraTrackingBtn');
+        const stopCameraTrackingBtn = document.getElementById('stopCameraTrackingBtn');
+        const cameraStatusSpan = document.getElementById('cameraStatus');
+        const cameraTrackingStatusSpan = document.getElementById('cameraTrackingStatus');
+        const cameraTargetInfoSpan = document.getElementById('cameraTargetInfo');
+        const currentAlgorithmCameraSpan = document.getElementById('currentAlgorithmCamera');
+        const cameraSelectionAreaDiv = document.getElementById('cameraSelectionArea');
+
+        const videoFileInput = document.getElementById('videoFileInput');
+        const videoPreviewEl = document.getElementById('videoPreview');
+        const videoPreviewForSelectionImg = document.getElementById('videoPreviewForSelection');
+        const videoPlaceholderDiv = document.getElementById('videoPlaceholder');
+        const extractFrameBtn = document.getElementById('extractFrameBtn');
+        const startVideoProcessingBtn = document.getElementById('startVideoProcessingBtn');
+        const downloadResultBtn = document.getElementById('downloadResultBtn');
+        const videoFileStatusSpan = document.getElementById('videoFileStatus');
+        const videoProgressTextSpan = document.getElementById('videoProgressText');
+        const videoTargetInfoSpan = document.getElementById('videoTargetInfo');
+        const currentAlgorithmVideoSpan = document.getElementById('currentAlgorithmVideo');
+        const videoProgressContainerDiv = document.getElementById('videoProgressContainer');
+        const videoProgressFillDiv = document.getElementById('videoProgressFill');
+        const videoSelectionAreaDiv = document.getElementById('videoSelectionArea');
+        const cameraFeedContainer = document.getElementById('cameraFeedContainer');
+        const videoPlayerContainer = document.getElementById('videoPlayerContainer');
+
+
+        // Initialization
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAlgorithms();
+            setupEventListeners();
+            addLog('系统初始化完成', 'info');
+            updateAlgorithmDisplays(); // Initialize algorithm display
+        });
+
+        function updateAlgorithmDisplays() {
+            currentAlgorithmCameraSpan.textContent = selectedAlgorithm.toUpperCase();
+            currentAlgorithmVideoSpan.textContent = selectedAlgorithm.toUpperCase();
+        }
+
+        // Logging
+        function addLog(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // Toast Notifications
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type}`; // Reset classes then add type
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // Load Algorithms
+        async function loadAlgorithms() {
+            try {
+                const response = await fetch(`${API_BASE}/algorithms`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const algorithms = await response.json();
+                
+                const grid = document.getElementById('algorithmGrid');
+                grid.innerHTML = ''; // Clear existing
+                
+                Object.entries(algorithms).forEach(([key, algo]) => {
+                    const card = document.createElement('div');
+                    card.className = 'algorithm-card';
+                    if (key === selectedAlgorithm) {
+                        card.classList.add('selected');
+                    }
+                    card.innerHTML = `<div class="algorithm-name">${algo.name}</div><div class="algorithm-speed">${algo.speed}</div>`;
+                    card.addEventListener('click', () => selectAlgorithm(key, card));
+                    grid.appendChild(card);
+                });
+                addLog('算法列表加载完成', 'success');
+            } catch (error) {
+                addLog(`加载算法列表失败: ${error.message}`, 'error');
+                showToast(`加载算法列表失败: ${error.message}`, 'error');
+            }
+        }
+
+        // Select Algorithm
+        function selectAlgorithm(algorithmKey, cardElement) {
+            document.querySelectorAll('.algorithm-card').forEach(card => card.classList.remove('selected'));
+            cardElement.classList.add('selected');
+            selectedAlgorithm = algorithmKey;
+            updateAlgorithmDisplays();
+            addLog(`选择算法: ${selectedAlgorithm.toUpperCase()}`, 'info');
+            showToast(`已选择算法: ${selectedAlgorithm.toUpperCase()}`, 'info');
+        }
+
+        // Setup Event Listeners
+        function setupEventListeners() {
+            startCameraBtn.addEventListener('click', handleStartCamera);
+            stopCameraBtn.addEventListener('click', handleStopCamera);
+            startCameraTrackingBtn.addEventListener('click', handleStartCameraTracking);
+            stopCameraTrackingBtn.addEventListener('click', handleStopCameraTracking);
+            
+            videoFileInput.addEventListener('change', handleVideoUpload);
+            extractFrameBtn.addEventListener('click', handleExtractFrameForSelection);
+            startVideoProcessingBtn.addEventListener('click', handleStartVideoProcessing);
+            downloadResultBtn.addEventListener('click', handleDownloadResult);
+        }
+        
+        // --- Camera Tracking Functions ---
+        async function handleStartCamera() {
+            addLog('正在启动摄像头...', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/camera/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json' // Explicitly set Content-Type
+                    },
+                    body: JSON.stringify({}) // Send an empty JSON object
+                });
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+
+                if (data.session_id) {
+                    cameraSessionId = data.session_id;
+                    cameraStreamImg.src = `${API_BASE}/camera/stream/${cameraSessionId}?_t=${new Date().getTime()}`; // Cache buster
+                    cameraStreamImg.style.display = 'block';
+                    cameraPlaceholderDiv.style.display = 'none';
+                    
+                    cameraStatusSpan.textContent = '运行中';
+                    cameraStatusSpan.className = 'status-value';
+                    startCameraBtn.disabled = true;
+                    stopCameraBtn.disabled = false;
+                    
+                    initializeROISelection('camera');
+
+                    addLog(`摄像头启动成功 (ID: ${cameraSessionId})`, 'success');
+                    showToast('摄像头已启动', 'success');
+                } else {
+                    throw new Error(data.message || '启动摄像头失败');
+                }
+            } catch (error) {
+                addLog(`启动摄像头失败: ${error.message}`, 'error');
+                showToast(`启动摄像头失败: ${error.message}`, 'error');
+                cameraStatusSpan.textContent = '启动失败';
+                cameraStatusSpan.className = 'status-value error';
+            }
+        }
+
+        async function handleStopCamera() {
+            if (!cameraSessionId) return;
+            addLog('正在关闭摄像头...', 'info');
+            try {
+                await fetch(`${API_BASE}/camera/stop/${cameraSessionId}`, { method: 'POST' });
+                cameraStreamImg.src = '#'; // Clear stream
+                cameraStreamImg.style.display = 'none';
+                cameraPlaceholderDiv.style.display = 'block';
+                
+                cameraStatusSpan.textContent = '未启动';
+                cameraTrackingStatusSpan.textContent = '未跟踪';
+                cameraTargetInfoSpan.textContent = '未选择';
+                startCameraBtn.disabled = false;
+                stopCameraBtn.disabled = true;
+                startCameraTrackingBtn.disabled = true;
+                stopCameraTrackingBtn.disabled = true;
+                cameraBBox = null;
+                cameraSessionId = null;
+                cameraSelectionAreaDiv.style.display = 'none';
+                isSelectingMode = null;
+
+
+                addLog('摄像头已关闭', 'success');
+                showToast('摄像头已关闭', 'success');
+            } catch (error) {
+                addLog(`关闭摄像头失败: ${error.message}`, 'error');
+                showToast(`关闭摄像头失败: ${error.message}`, 'error');
+            }
+        }
+
+        async function handleStartCameraTracking() {
+            if (!cameraSessionId || !cameraBBox) {
+                showToast('请先启动摄像头并选择跟踪目标', 'error');
+                return;
+            }
+            addLog(`开始摄像头跟踪 (算法: ${selectedAlgorithm})...`, 'info');
+            try {
+                const response = await fetch(`${API_BASE}/camera/track/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: cameraSessionId, bbox: cameraBBox, algorithm: selectedAlgorithm })
+                });
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+
+                if (data.tracking_active) {
+                    cameraSelectionAreaDiv.style.display = 'none'; 
+                    cameraTrackingStatusSpan.textContent = '跟踪中';
+                    startCameraTrackingBtn.disabled = true;
+                    stopCameraTrackingBtn.disabled = false;
+                    addLog('摄像头跟踪已启动', 'success');
+                    showToast('摄像头跟踪已启动', 'success');
+                } else {
+                     throw new Error(data.message || '启动跟踪失败');
+                }
+            } catch (error) {
+                addLog(`启动摄像头跟踪失败: ${error.message}`, 'error');
+                showToast(`启动摄像头跟踪失败: ${error.message}`, 'error');
+                cameraTrackingStatusSpan.textContent = '跟踪失败';
+            }
+        }
+
+        async function handleStopCameraTracking() {
+            if (!cameraSessionId) return;
+            addLog('正在停止摄像头跟踪...', 'info');
+            try {
+                await fetch(`${API_BASE}/camera/track/stop`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: cameraSessionId })
+                });
+                cameraTrackingStatusSpan.textContent = '未跟踪';
+                stopCameraTrackingBtn.disabled = true;
+                startCameraTrackingBtn.disabled = cameraBBox ? false : true; // Can restart if ROI exists
+                addLog('摄像头跟踪已停止', 'success');
+                showToast('摄像头跟踪已停止', 'success');
+            } catch (error) {
+                addLog(`停止摄像头跟踪失败: ${error.message}`, 'error');
+                showToast(`停止摄像头跟踪失败: ${error.message}`, 'error');
+            }
+        }
+
+
+        // --- Video File Tracking Functions ---
+        async function handleVideoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            addLog(`正在上传视频: ${file.name}`, 'info');
+            videoFileStatusSpan.textContent = '上传中...';
+            const formData = new FormData();
+            formData.append('video', file);
+
+            try {
+                const response = await fetch(`${API_BASE}/upload`, { method: 'POST', body: formData });
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                uploadedVideoInfo = await response.json();
+
+                videoPreviewEl.src = URL.createObjectURL(file);
+                videoPreviewEl.style.display = 'block';
+                videoPreviewForSelectionImg.style.display = 'none'; // Ensure this is hidden
+                videoPlaceholderDiv.style.display = 'none';
+                
+                videoFileStatusSpan.textContent = '已上传';
+                extractFrameBtn.disabled = false;
+                startVideoProcessingBtn.disabled = true; // Requires ROI
+                downloadResultBtn.disabled = true;
+                videoBBox = null; // Reset previous video ROI
+                videoTargetInfoSpan.textContent = '未选择';
+
+
+                addLog(`视频上传成功: ${uploadedVideoInfo.filename}`, 'success');
+                showToast('视频上传成功!', 'success');
+            } catch (error) {
+                addLog(`视频上传失败: ${error.message}`, 'error');
+                showToast(`视频上传失败: ${error.message}`, 'error');
+                videoFileStatusSpan.textContent = '上传失败';
+            }
+        }
+        
+        function handleExtractFrameForSelection() {
+            if (!videoPreviewEl.src || videoPreviewEl.paused === false) {
+                 videoPreviewEl.pause();
+            }
+            
+            // Draw current video frame to the image element for selection
+            const canvas = document.createElement('canvas');
+            canvas.width = videoPreviewEl.videoWidth;
+            canvas.height = videoPreviewEl.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(videoPreviewEl, 0, 0, canvas.width, canvas.height);
+            videoPreviewForSelectionImg.src = canvas.toDataURL();
+            
+            videoPreviewEl.style.display = 'none'; // Hide video
+            videoPreviewForSelectionImg.style.display = 'block'; // Show image
+            
+            videoSelectionAreaDiv.style.left = '0px'; // Reset position
+            videoSelectionAreaDiv.style.top = '0px';
+            videoSelectionAreaDiv.style.width = '0px';
+            videoSelectionAreaDiv.style.height = '0px';
+            
+            addLog('帧已提取，请在图像上选择目标区域.', 'info');
+            showToast('请选择目标区域', 'info');
+            initializeROISelection('video'); // Setup selection for video on the image
+        }
+
+
+        async function handleStartVideoProcessing() {
+            if (!uploadedVideoInfo || !videoBBox) {
+                showToast('请上传视频并选择跟踪目标', 'error');
+                return;
+            }
+            addLog(`开始视频处理 (算法: ${selectedAlgorithm})...`, 'info');
+            videoProgressContainerDiv.style.display = 'block';
+            videoProgressFillDiv.style.width = '0%';
+            videoProgressTextSpan.textContent = '0%';
+            startVideoProcessingBtn.disabled = true;
+            extractFrameBtn.disabled = true; // Disable while processing
+
+            try {
+                const response = await fetch(`${API_BASE}/start_tracking`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        video_path: uploadedVideoInfo.filepath,
+                        bbox: videoBBox,
+                        algorithm: selectedAlgorithm
+                    })
+                });
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                videoProcessingTaskId = data.task_id;
+                addLog(`视频处理任务已启动 (ID: ${videoProcessingTaskId})`, 'success');
+                pollVideoProcessingStatus();
+            } catch (error) {
+                addLog(`启动视频处理失败: ${error.message}`, 'error');
+                showToast(`启动视频处理失败: ${error.message}`, 'error');
+                videoProgressContainerDiv.style.display = 'none';
+                startVideoProcessingBtn.disabled = false; // Re-enable
+                extractFrameBtn.disabled = false;
+            }
+        }
+
+        async function pollVideoProcessingStatus() {
+            if (!videoProcessingTaskId) return;
+            try {
+                const response = await fetch(`${API_BASE}/tracking_status/${videoProcessingTaskId}`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const status = await response.json();
+
+                videoProgressFillDiv.style.width = `${status.progress || 0}%`;
+                videoProgressTextSpan.textContent = `${(status.progress || 0).toFixed(1)}%`;
+
+                if (status.status === 'processing') {
+                    setTimeout(pollVideoProcessingStatus, 1000);
+                } else if (status.status === 'completed') {
+                    addLog('视频处理完成!', 'success');
+                    showToast('视频处理完成!', 'success');
+                    videoProgressTextSpan.textContent = '完成';
+                    downloadResultBtn.disabled = false;
+                    extractFrameBtn.disabled = false; // Re-enable
+                } else if (status.status === 'error') {
+                    throw new Error(status.error || '处理过程中发生未知错误');
+                }
+            } catch (error) {
+                addLog(`视频处理状态错误: ${error.message}`, 'error');
+                showToast(`视频处理错误: ${error.message}`, 'error');
+                videoProgressTextSpan.textContent = '错误';
+                videoProgressContainerDiv.style.display = 'none';
+                startVideoProcessingBtn.disabled = false; // Re-enable
+                extractFrameBtn.disabled = false;
+            }
+        }
+
+        async function handleDownloadResult() {
+            if (!videoProcessingTaskId) return;
+            addLog('准备下载结果...', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/download_result/${videoProcessingTaskId}`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `tracked_${uploadedVideoInfo.filename.split('.')[0]}_${selectedAlgorithm}.mp4`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+                addLog('结果下载已开始.', 'success');
+            } catch (error) {
+                addLog(`下载结果失败: ${error.message}`, 'error');
+                showToast(`下载结果失败: ${error.message}`, 'error');
+            }
+        }
+
+        // --- ROI Selection Logic ---
+        let selectionRect = { startX: 0, startY: 0, currentX: 0, currentY: 0 };
+        let isDrawingSelection = false;
+        
+        function initializeROISelection(context) { // context is 'camera' or 'video'
+            isSelectingMode = context; // Set current selection context
+            
+            const mediaContainer = (context === 'camera') ? cameraFeedContainer : videoPlayerContainer;
+            const mediaElement = (context === 'camera') ? cameraStreamImg : videoPreviewForSelectionImg; // Select on the static image for video
+            const selectionAreaDiv = (context === 'camera') ? cameraSelectionAreaDiv : videoSelectionAreaDiv;
+
+            // Make selection area interactive for this context
+            selectionAreaDiv.style.pointerEvents = 'none'; // The container will handle mouse events
+            mediaContainer.style.cursor = 'crosshair';
+
+            // Remove previous listeners to avoid duplication if called multiple times
+            mediaContainer.onmousedown = null;
+            mediaContainer.onmousemove = null;
+            mediaContainer.onmouseup = null;
+            mediaContainer.onmouseleave = null;
+
+
+            mediaContainer.onmousedown = (e) => {
+                if (isSelectingMode !== context) return; // Only act if in the correct context
+                e.preventDefault();
+                isDrawingSelection = true;
+                const rect = mediaElement.getBoundingClientRect(); // Use media element for offset calculation
+                selectionRect.startX = e.clientX - rect.left;
+                selectionRect.startY = e.clientY - rect.top;
+                
+                selectionAreaDiv.style.left = `${selectionRect.startX}px`;
+                selectionAreaDiv.style.top = `${selectionRect.startY}px`;
+                selectionAreaDiv.style.width = '0px';
+                selectionAreaDiv.style.height = '0px';
+                selectionAreaDiv.style.display = 'block';
+            };
+
+            mediaContainer.onmousemove = (e) => {
+                if (!isDrawingSelection || isSelectingMode !== context) return;
+                const rect = mediaElement.getBoundingClientRect();
+                selectionRect.currentX = e.clientX - rect.left;
+                selectionRect.currentY = e.clientY - rect.top;
+
+                const x = Math.min(selectionRect.startX, selectionRect.currentX);
+                const y = Math.min(selectionRect.startY, selectionRect.currentY);
+                const width = Math.abs(selectionRect.startX - selectionRect.currentX);
+                const height = Math.abs(selectionRect.startY - selectionRect.currentY);
+
+                selectionAreaDiv.style.left = `${x}px`;
+                selectionAreaDiv.style.top = `${y}px`;
+                selectionAreaDiv.style.width = `${width}px`;
+                selectionAreaDiv.style.height = `${height}px`;
+            };
+
+            mediaContainer.onmouseup = (e) => {
+                if (!isDrawingSelection || isSelectingMode !== context) return;
+                isDrawingSelection = false;
+                mediaContainer.style.cursor = 'default';
+                
+                const rect = mediaElement.getBoundingClientRect();
+                const finalX = e.clientX - rect.left;
+                const finalY = e.clientY - rect.top;
+
+                const selLeft = Math.min(selectionRect.startX, finalX);
+                const selTop = Math.min(selectionRect.startY, finalY);
+                const selWidth = Math.abs(selectionRect.startX - finalX);
+                const selHeight = Math.abs(selectionRect.startY - finalY);
+
+                if (selWidth < 10 || selHeight < 10) { // Min selection size
+                    selectionAreaDiv.style.display = 'none';
+                    showToast('选择区域太小', 'error');
+                    if (context === 'camera') cameraBBox = null; else videoBBox = null;
+                    return;
+                }
+                
+                // Scale bbox to original media dimensions
+                const scaleX = (mediaElement.naturalWidth || mediaElement.videoWidth) / mediaElement.clientWidth;
+                const scaleY = (mediaElement.naturalHeight || mediaElement.videoHeight) / mediaElement.clientHeight;
+
+                const bbox = {
+                    x: Math.round(selLeft * scaleX),
+                    y: Math.round(selTop * scaleY),
+                    width: Math.round(selWidth * scaleX),
+                    height: Math.round(selHeight * scaleY)
+                };
+
+                if (context === 'camera') {
+                    cameraBBox = bbox;
+                    cameraTargetInfoSpan.textContent = `X:${bbox.x}, Y:${bbox.y}, W:${bbox.width}, H:${bbox.height}`;
+                    startCameraTrackingBtn.disabled = false;
+                    addLog(`摄像头目标选择: ${JSON.stringify(bbox)}`, 'info');
+                } else { // video context
+                    videoBBox = bbox;
+                    videoTargetInfoSpan.textContent = `X:${bbox.x}, Y:${bbox.y}, W:${bbox.width}, H:${bbox.height}`;
+                    startVideoProcessingBtn.disabled = false;
+                    addLog(`视频目标选择: ${JSON.stringify(bbox)}`, 'info');
+                    // After selection, hide the image and show video player again for video
+                    videoPreviewForSelectionImg.style.display = 'none';
+                    videoPreviewEl.style.display = 'block';
+                    selectionAreaDiv.style.display = 'none'; // Hide selection box for video context
+                }
+                showToast('目标已选择!', 'success');
+            };
+            
+            mediaContainer.onmouseleave = (e) => { // If mouse leaves while drawing
+                if (isDrawingSelection && isSelectingMode === context) {
+                    isDrawingSelection = false;
+                     mediaContainer.style.cursor = 'default';
+                    selectionAreaDiv.style.display = 'none';
+                     addLog('选择已取消 (鼠标移出区域)', 'info');
+                }
+            };
+        }
+
+    </script>
+</body>
+</html>
