@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, send_file, Response
 from flask_cors import CORS
 import cv2
+import atexit # 注册清理函数
 import numpy as np
 import os
 import json
@@ -12,6 +13,13 @@ import time
 import base64
 from io import BytesIO
 import queue
+from MOSSE import MOSSETracker  # 导入自定义MOSSE跟踪器
+# from KCF import KCFTracker  # 导入自定义KCF跟踪器
+# from CSRT import CSRTTracker  # 导入自定义CSRT跟踪器
+from TLD import TLDTracker  # 导入自定义TLD跟踪器
+from Boostingtracking import BoostingTracker  # 导入自定义Boosting跟踪器
+# from MIL import MILTracker  # 导入自定义MIL跟踪器
+
 
 app = Flask(__name__)
 CORS(app)
@@ -37,24 +45,34 @@ class ObjectTracker:
     def __init__(self, algorithm='kcf'):
         self.algorithm = algorithm
         self.tracker = None
+        self.custom_mosse = None  # 自定义MOSSE跟踪器
+        self.custom_tld = None    # 自定义TLD跟踪器
+        self.custom_boosting = None # 自定义Boosting跟踪器
         self.initialized = False
         
     def create_tracker(self):
         try:
-            if self.algorithm == 'kcf':
-                tracker = cv2.TrackerKCF_create()
+            if self.algorithm == 'mosse':
+                # 使用自定义MOSSE跟踪器
+                print("使用自定义MOSSE跟踪器")
+                self.custom_mosse = MOSSETracker(learning_rate=0.125, sigma=2.0)
+                return True
+            elif self.algorithm == 'kcf':
+                tracker = cv2.legacy.TrackerKCF_create()
             elif self.algorithm == 'csrt':
-                tracker = cv2.TrackerCSRT_create()
-            elif self.algorithm == 'mosse':
-                tracker = cv2.legacy.TrackerMOSSE_create()
+                tracker = cv2.legacy.TrackerCSRT_create()
             elif self.algorithm == 'mil':
                 tracker = cv2.legacy.TrackerMIL_create()
             elif self.algorithm == 'boosting':
-                tracker = cv2.legacy.TrackerBoosting_create()
+                print("使用自定义Boosting跟踪器")
+                self.custom_boosting = BoostingTracker()
+                return True
             elif self.algorithm == 'tld':
-                tracker = cv2.legacy.TrackerTLD_create()
+                print("使用自定义TLD跟踪器")
+                self.custom_tld = TLDTracker()
+                return True
             else:
-                tracker = cv2.TrackerKCF_create()
+                tracker = cv2.legacy.TrackerKCF_create()
 
             print(f"成功创建 {self.algorithm} 跟踪器")
             return tracker
@@ -63,40 +81,106 @@ class ObjectTracker:
             return None
 
     def initialize(self, frame, bbox):
-        self.tracker = self.create_tracker()
-        if self.tracker is None:
-            print(f"跟踪器创建失败，无法初始化 {self.algorithm}")
-            return False
+        if self.algorithm == 'mosse':
+            # 使用自定义MOSSE跟踪器
+            self.custom_mosse = MOSSETracker(learning_rate=0.125, sigma=2.0)
+            bbox_tuple = (int(bbox['x']), int(bbox['y']), int(bbox['width']), int(bbox['height']))
+            try:
+                self.initialized = self.custom_mosse.init(frame, bbox_tuple)
+                if not self.initialized:
+                    print("自定义MOSSE跟踪器初始化失败")
+                    print("图像尺寸:", frame.shape)
+                    print("初始框:", bbox)
+                else:
+                    print("自定义MOSSE跟踪器初始化成功")
+                return self.initialized
+            except Exception as e:
+                print(f"自定义MOSSE跟踪器初始化时发生错误: {e}")
+                return False
+        
+        elif self.algorithm == 'boosting':
+            # 使用自定义Boosting跟踪器
+            self.custom_boosting = BoostingTracker()
+            bbox_tuple = (int(bbox['x']), int(bbox['y']), int(bbox['width']), int(bbox['height']))
+            try:
+                self.initialized = self.custom_boosting.init(frame, bbox_tuple)
+                if not self.initialized:
+                    print("自定义Boosting跟踪器初始化失败")
+                    print("图像尺寸:", frame.shape)
+                    print("初始框:", bbox)
+                else:
+                    print("自定义Boosting跟踪器初始化成功")
+                return self.initialized
+            except Exception as e:
+                print(f"自定义Boosting跟踪器初始化时发生错误: {e}")
+                return False
+        
+        elif self.algorithm == 'tld':
+            # 使用自定义TLD跟踪器
+            self.custom_tld = TLDTracker()
+            bbox_tuple = (int(bbox['x']), int(bbox['y']), int(bbox['width']), int(bbox['height']))
+            try:
+                self.initialized = self.custom_tld.init(frame, bbox_tuple)
+                if not self.initialized:
+                    print("自定义TLD跟踪器初始化失败")
+                    print("图像尺寸:", frame.shape)
+                    print("初始框:", bbox)
+                else:
+                    print("自定义TLD跟踪器初始化成功")
+                return self.initialized
+            except Exception as e:
+                print(f"自定义TLD跟踪器初始化时发生错误: {e}")
+        
+        else:
+            # 使用OpenCV跟踪器
+            self.tracker = self.create_tracker()
+            if self.tracker is None:
+                print(f"跟踪器创建失败，无法初始化 {self.algorithm}")
+                return False
 
-        bbox_tuple = (int(bbox['x']), int(bbox['y']), int(bbox['width']), int(bbox['height']))
-        try:
-            self.initialized = self.tracker.init(frame, bbox_tuple)
-            if not self.initialized:
-                print(f"{self.algorithm} 跟踪器初始化失败")
-                print("图像尺寸:", frame.shape)
-                print("初始框:", bbox)
-                print("是否在图像内:", 0 <= bbox['x'] < frame.shape[1], 0 <= bbox['y'] < frame.shape[0])
-            else:
-                print(f"{self.algorithm} 跟踪器初始化成功")
-            return self.initialized
-        except Exception as e:
-            print(f"{self.algorithm} 跟踪器初始化时发生错误: {e}")
-            return False
+            bbox_tuple = (int(bbox['x']), int(bbox['y']), int(bbox['width']), int(bbox['height']))
+            try:
+                self.initialized = self.tracker.init(frame, bbox_tuple)
+                if not self.initialized:
+                    print(f"{self.algorithm} 跟踪器初始化失败")
+                    print("图像尺寸:", frame.shape)
+                    print("初始框:", bbox)
+                    print("是否在图像内:", 0 <= bbox['x'] < frame.shape[1], 0 <= bbox['y'] < frame.shape[0])
+                else:
+                    print(f"{self.algorithm} 跟踪器初始化成功")
+                return self.initialized
+            except Exception as e:
+                print(f"{self.algorithm} 跟踪器初始化时发生错误: {e}")
+                return False
     
     def update(self, frame):
         """更新跟踪器"""
         if not self.initialized:
             return False, None
         
-        success, bbox = self.tracker.update(frame)
-        if success:
-            return True, {
-                'x': int(bbox[0]),
-                'y': int(bbox[1]), 
-                'width': int(bbox[2]),
-                'height': int(bbox[3])
-            }
-        return False, None
+        if self.algorithm == 'mosse':
+            # 使用自定义MOSSE跟踪器
+            success, bbox = self.custom_mosse.update(frame)
+            return success, bbox
+        elif self.algorithm == 'boosting':
+            # 使用自定义Boosting跟踪器
+            success, bbox = self.custom_boosting.update(frame)
+            return success, bbox
+        elif self.algorithm == 'tld':
+            # 使用自定义TLD跟踪器
+            success, bbox = self.custom_tld.update(frame)
+            return success, bbox
+        else:
+            # 使用OpenCV跟踪器
+            success, bbox = self.tracker.update(frame)
+            if success:
+                return True, {
+                    'x': int(bbox[0]),
+                    'y': int(bbox[1]), 
+                    'width': int(bbox[2]),
+                    'height': int(bbox[3])
+                }
+            return False, None
 
 class CameraSession:
     def __init__(self, session_id, camera_id=0):
@@ -114,6 +198,10 @@ class CameraSession:
         self.fps = 30
         self.width = 640
         self.height = 480
+        # 添加轨迹相关属性
+        self.trajectory = []  # 存储轨迹点
+        self.max_trajectory_length = 50  # 最大轨迹长度
+        self.show_trajectory = True  # 是否显示轨迹
         
     def start_camera(self):
         """启动摄像头"""
@@ -161,18 +249,44 @@ class CameraSession:
                         self.bbox = bbox
                         # 绘制跟踪框
                         x, y, w, h = int(bbox['x']), int(bbox['y']), int(bbox['width']), int(bbox['height'])
+                        
+                        # 计算目标中心点并添加到轨迹
+                        center_x = x + w // 2
+                        center_y = y + h // 2
+                        self.trajectory.append((center_x, center_y))
+                        
+                        # 限制轨迹长度
+                        if len(self.trajectory) > self.max_trajectory_length:
+                            self.trajectory.pop(0)
+                        
+                        # 绘制轨迹线（蓝色）
+                        if self.show_trajectory and len(self.trajectory) > 1:
+                            for i in range(1, len(self.trajectory)):
+                                # 计算透明度，越新的点越不透明
+                                alpha = i / len(self.trajectory)
+                                thickness = max(1, int(3 * alpha))
+                                
+                                cv2.line(frame, self.trajectory[i-1], self.trajectory[i], 
+                                        (255, 0, 0), thickness)  # 蓝色轨迹
+                        
+                        # 绘制当前目标中心点（红色小圆点）
+                        cv2.circle(frame, (center_x, center_y), 3, (0, 0, 255), -1)
+                        
+                        # 绘制跟踪框（绿色）
                         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
                         
                         # 添加算法标签
                         label = f'{self.algorithm.upper()} Tracker'
                         cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                         
-                        # 添加帧率信息
+                        # 添加帧率和轨迹点数信息
                         cv2.putText(frame, f'FPS: {self.fps}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                        cv2.putText(frame, f'Trajectory: {len(self.trajectory)} points', (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                     else:
                         # 跟踪失败
                         cv2.putText(frame, 'Tracking Lost', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                         self.bbox = None
+                        # 跟踪失败时不清空轨迹，保持历史轨迹显示
                 
                 # 更新最新帧
                 self.latest_frame = frame.copy()
@@ -200,15 +314,21 @@ class CameraSession:
         if success:
             self.tracking_active = True
             self.bbox = bbox
+            # 重置轨迹，添加初始中心点
+            center_x = int(bbox['x'] + bbox['width'] // 2)
+            center_y = int(bbox['y'] + bbox['height'] // 2)
+            self.trajectory = [(center_x, center_y)]
             return True, "跟踪启动成功"
         else:
             return False, "跟踪器初始化失败"
     
-    def stop_tracking(self):
+    def stop_tracking(self, clear_trajectory=False):
         """停止目标跟踪"""
         self.tracking_active = False
         self.tracker = None
         self.bbox = None
+        if clear_trajectory:
+            self.trajectory = []
     
     def get_latest_frame(self):
         """获取最新帧"""
@@ -235,7 +355,23 @@ class CameraSession:
             self.cap.release()
         print(f"摄像头会话 {self.session_id} 已停止")
 
-# 原有的视频处理跟踪函数（保持不变）
+    def toggle_trajectory(self):
+        """切换轨迹显示"""
+        self.show_trajectory = not self.show_trajectory
+        return self.show_trajectory
+    
+    def clear_trajectory(self):
+        """清空轨迹"""
+        self.trajectory = []
+    
+    def set_trajectory_length(self, length):
+        """设置轨迹最大长度"""
+        self.max_trajectory_length = max(10, min(200, length))
+        # 如果当前轨迹超过新长度，进行裁剪
+        if len(self.trajectory) > self.max_trajectory_length:
+            self.trajectory = self.trajectory[-self.max_trajectory_length:]
+
+# 视频处理跟踪函数
 def process_video_tracking(task_id, video_path, bbox, algorithm):
     """处理视频跟踪的后台任务"""
     try:
@@ -278,8 +414,9 @@ def process_video_tracking(task_id, video_path, bbox, algorithm):
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
         
-        # 存储跟踪数据
+        # 存储跟踪数据和轨迹
         tracking_data = []
+        trajectory = []
         frame_count = 0
         
         # 重置视频到开头
@@ -301,24 +438,54 @@ def process_video_tracking(task_id, video_path, bbox, algorithm):
             if success and current_bbox:
                 # 确保坐标是整数
                 x, y, w, h = int(current_bbox['x']), int(current_bbox['y']), int(current_bbox['width']), int(current_bbox['height'])
+                
+                # 计算中心点并添加到轨迹
+                center_x = x + w // 2
+                center_y = y + h // 2
+                trajectory.append((center_x, center_y))
+                
+                # 绘制轨迹线（蓝色）
+                if len(trajectory) > 1:
+                    for i in range(1, len(trajectory)):
+                        # 计算透明度和线条粗细
+                        alpha = i / len(trajectory)
+                        thickness = max(1, int(3 * alpha))
+                        cv2.line(frame, trajectory[i-1], trajectory[i], (255, 0, 0), thickness)
+                
+                # 绘制当前目标中心点（红色）
+                cv2.circle(frame, (center_x, center_y), 3, (0, 0, 255), -1)
+                
+                # 绘制跟踪框（绿色）
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
                 # 添加算法标签
                 label = f'{algorithm.upper()} Tracker'
                 cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
+                # 添加轨迹信息
+                cv2.putText(frame, f'Trajectory: {len(trajectory)} points', (10, height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
                 # 保存跟踪数据
                 tracking_data.append({
                     'frame': frame_count,
                     'bbox': current_bbox,
+                    'center': {'x': center_x, 'y': center_y},
                     'confidence': 0.8 if success else 0.0
                 })
             else:
-                # 跟踪失败，绘制红色提示
+                # 跟踪失败，绘制红色提示，但保持轨迹显示
                 cv2.putText(frame, 'Tracking Lost', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                # 继续绘制已有轨迹
+                if len(trajectory) > 1:
+                    for i in range(1, len(trajectory)):
+                        alpha = i / len(trajectory)
+                        thickness = max(1, int(3 * alpha))
+                        cv2.line(frame, trajectory[i-1], trajectory[i], (255, 0, 0), thickness)
+                
                 tracking_data.append({
                     'frame': frame_count,
                     'bbox': None,
+                    'center': None,
                     'confidence': 0.0
                 })
             
@@ -338,10 +505,15 @@ def process_video_tracking(task_id, video_path, bbox, algorithm):
         cap.release()
         out.release()
         
-        # 保存跟踪数据到JSON文件
+        # 保存跟踪数据到JSON文件（包含轨迹信息）
         data_path = os.path.join(app.config['OUTPUT_FOLDER'], f'{task_id}_data.json')
+        result_data = {
+            'tracking_data': tracking_data,
+            'trajectory': trajectory,
+            'total_frames': total_frames
+        }
         with open(data_path, 'w') as f:
-            json.dump(tracking_data, f)
+            json.dump(result_data, f)
         
         # 更新任务状态为完成
         tracking_tasks[task_id]['status'] = 'completed'
@@ -358,7 +530,8 @@ def process_video_tracking(task_id, video_path, bbox, algorithm):
             'total_frames': total_frames,
             'successful_frames': len(successful_tracks),
             'success_rate': len(successful_tracks) / total_frames * 100,
-            'avg_confidence': avg_confidence
+            'avg_confidence': avg_confidence,
+            'trajectory_length': len(trajectory)
         }
         
     except Exception as e:
@@ -366,7 +539,6 @@ def process_video_tracking(task_id, video_path, bbox, algorithm):
         tracking_tasks[task_id]['error'] = str(e)
 
 # ==================== 摄像头相关API ====================
-
 @app.route('/api/camera/start', methods=['POST'])
 def start_camera():
     """启动摄像头会话"""
@@ -520,6 +692,11 @@ def get_camera_status(session_id):
         'tracking_active': session.tracking_active,
         'algorithm': session.algorithm,
         'current_bbox': session.bbox,
+        'trajectory_info': {
+            'show_trajectory': session.show_trajectory,
+            'trajectory_length': len(session.trajectory),
+            'max_trajectory_length': session.max_trajectory_length
+        },
         'camera_info': {
             'width': session.width,
             'height': session.height,
@@ -528,7 +705,6 @@ def get_camera_status(session_id):
     })
 
 # ==================== 视频方面API ====================
-
 @app.route('/api/upload', methods=['POST'])
 def upload_video():
     """上传视频文件"""
@@ -719,7 +895,6 @@ def get_algorithms():
             'accuracy': 'high'
         }
     }
-    
     return jsonify(algorithms)
 
 @app.route('/api/cleanup', methods=['POST'])
@@ -776,8 +951,63 @@ def cleanup_all_sessions():
             session.stop_camera()
         camera_sessions.clear()
 
-# 注册清理函数
-import atexit
+
+# ==================== 轨迹显示相关API ====================
+@app.route('/api/camera/trajectory/toggle', methods=['POST'])
+def toggle_trajectory():
+    """切换轨迹显示"""
+    data = request.json
+    session_id = data.get('session_id')
+    
+    if session_id not in camera_sessions:
+        return jsonify({'error': '会话不存在'}), 404
+    
+    session = camera_sessions[session_id]
+    show_trajectory = session.toggle_trajectory()
+    
+    return jsonify({
+        'status': 'success',
+        'show_trajectory': show_trajectory,
+        'message': f'轨迹显示已{"开启" if show_trajectory else "关闭"}'
+    })
+
+@app.route('/api/camera/trajectory/clear', methods=['POST'])
+def clear_trajectory():
+    """清空轨迹"""
+    data = request.json
+    session_id = data.get('session_id')
+    
+    if session_id not in camera_sessions:
+        return jsonify({'error': '会话不存在'}), 404
+    
+    session = camera_sessions[session_id]
+    session.clear_trajectory()
+    
+    return jsonify({
+        'status': 'success',
+        'message': '轨迹已清空'
+    })
+
+@app.route('/api/camera/trajectory/length', methods=['POST'])
+def set_trajectory_length():
+    """设置轨迹长度"""
+    data = request.json
+    session_id = data.get('session_id')
+    length = data.get('length', 50)
+    
+    if session_id not in camera_sessions:
+        return jsonify({'error': '会话不存在'}), 404
+    
+    session = camera_sessions[session_id]
+    session.set_trajectory_length(length)
+    
+    return jsonify({
+        'status': 'success',
+        'trajectory_length': session.max_trajectory_length,
+        'message': f'轨迹长度已设置为 {session.max_trajectory_length}'
+    })
+
+
 atexit.register(cleanup_all_sessions)
 
 if __name__ == '__main__':
