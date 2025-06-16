@@ -91,14 +91,13 @@
             border-radius: 8px;
         }
         
-        #videoPreviewForSelection { /* Added for video frame selection */
+        #videoPreviewForSelection {
             width: 100%;
             height: 100%;
             object-fit: cover;
             border-radius: 8px;
-            display: none; /* Initially hidden */
+            display: none; 
         }
-
 
         .placeholder {
             text-align: center;
@@ -237,7 +236,7 @@
             position: absolute;
             border: 2px solid #28a745;
             background: rgba(40, 167, 69, 0.2);
-            pointer-events: none; /* Will be handled by JS */
+            pointer-events: none; 
             display: none;
         }
 
@@ -318,7 +317,7 @@
             color: white;
             font-weight: 600;
             z-index: 1000;
-            transform: translateX(120%); /* Adjusted for smoother exit */
+            transform: translateX(120%); 
             opacity: 0;
             transition: transform 0.3s ease, opacity 0.3s ease;
         }
@@ -363,6 +362,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
@@ -523,14 +523,13 @@
     <script>
         // 全局变量
         let cameraSessionId = null;
-        let videoProcessingTaskId = null; // Renamed
-        let selectedAlgorithm = 'kcf'; // Default algorithm
-        
-        let cameraBBox = null; // For storing camera ROI
-        let videoBBox = null;   // For storing video ROI
+        let videoProcessingTaskId = null; 
+        let selectedAlgorithm = 'kcf'; // 默认算法
+        let cameraBBox = null; 
+        let videoBBox = null;
 
         let uploadedVideoInfo = null;
-        let isSelectingMode = null; // 'camera' or 'video' or null
+        let isSelectingMode = null; // 用于区分摄像头或视频的选择模式
 
         // API基础URL
         const API_BASE = 'http://localhost:5000/api';
@@ -547,7 +546,6 @@
         const cameraTargetInfoSpan = document.getElementById('cameraTargetInfo');
         const currentAlgorithmCameraSpan = document.getElementById('currentAlgorithmCamera');
         const cameraSelectionAreaDiv = document.getElementById('cameraSelectionArea');
-
         const videoFileInput = document.getElementById('videoFileInput');
         const videoPreviewEl = document.getElementById('videoPreview');
         const videoPreviewForSelectionImg = document.getElementById('videoPreviewForSelection');
@@ -566,12 +564,12 @@
         const videoPlayerContainer = document.getElementById('videoPlayerContainer');
 
 
-        // Initialization
+        // 初始化
         document.addEventListener('DOMContentLoaded', function() {
             loadAlgorithms();
             setupEventListeners();
             addLog('系统初始化完成', 'info');
-            updateAlgorithmDisplays(); // Initialize algorithm display
+            updateAlgorithmDisplays(); 
         });
 
         function updateAlgorithmDisplays() {
@@ -579,7 +577,7 @@
             currentAlgorithmVideoSpan.textContent = selectedAlgorithm.toUpperCase();
         }
 
-        // Logging
+        // 日志记录函数
         function addLog(message, type = 'info') {
             const logContainer = document.getElementById('logContainer');
             const timestamp = new Date().toLocaleTimeString();
@@ -590,11 +588,11 @@
             logContainer.scrollTop = logContainer.scrollHeight;
         }
 
-        // Toast Notifications
+        // 显示Toast消息
         function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
             toast.textContent = message;
-            toast.className = `toast ${type}`; // Reset classes then add type
+            toast.className = `toast ${type}`;
             toast.classList.add('show');
             
             setTimeout(() => {
@@ -602,7 +600,7 @@
             }, 3000);
         }
 
-        // Load Algorithms
+        // 加载算法列表
         async function loadAlgorithms() {
             try {
                 const response = await fetch(`${API_BASE}/algorithms`);
@@ -610,7 +608,7 @@
                 const algorithms = await response.json();
                 
                 const grid = document.getElementById('algorithmGrid');
-                grid.innerHTML = ''; // Clear existing
+                grid.innerHTML = ''; 
                 
                 Object.entries(algorithms).forEach(([key, algo]) => {
                     const card = document.createElement('div');
@@ -629,7 +627,7 @@
             }
         }
 
-        // Select Algorithm
+        // 选择算法
         function selectAlgorithm(algorithmKey, cardElement) {
             document.querySelectorAll('.algorithm-card').forEach(card => card.classList.remove('selected'));
             cardElement.classList.add('selected');
@@ -639,7 +637,7 @@
             showToast(`已选择算法: ${selectedAlgorithm.toUpperCase()}`, 'info');
         }
 
-        // Setup Event Listeners
+        // 设置事件监听器
         function setupEventListeners() {
             startCameraBtn.addEventListener('click', handleStartCamera);
             stopCameraBtn.addEventListener('click', handleStopCamera);
@@ -652,23 +650,23 @@
             downloadResultBtn.addEventListener('click', handleDownloadResult);
         }
         
-        // --- Camera Tracking Functions ---
+        // 摄像头跟踪函数
         async function handleStartCamera() {
             addLog('正在启动摄像头...', 'info');
             try {
                 const response = await fetch(`${API_BASE}/camera/start`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json' // Explicitly set Content-Type
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({}) // Send an empty JSON object
+                    body: JSON.stringify({})
                 });
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
 
                 if (data.session_id) {
                     cameraSessionId = data.session_id;
-                    cameraStreamImg.src = `${API_BASE}/camera/stream/${cameraSessionId}?_t=${new Date().getTime()}`; // Cache buster
+                    cameraStreamImg.src = `${API_BASE}/camera/stream/${cameraSessionId}?_t=${new Date().getTime()}`; 
                     cameraStreamImg.style.display = 'block';
                     cameraPlaceholderDiv.style.display = 'none';
                     
@@ -692,6 +690,7 @@
             }
         }
 
+        // 关闭摄像头
         async function handleStopCamera() {
             if (!cameraSessionId) return;
             addLog('正在关闭摄像头...', 'info');
@@ -722,6 +721,7 @@
             }
         }
 
+        // ROI选择初始化
         async function handleStartCameraTracking() {
             if (!cameraSessionId || !cameraBBox) {
                 showToast('请先启动摄像头并选择跟踪目标', 'error');
@@ -754,6 +754,7 @@
             }
         }
 
+        // 停止摄像头跟踪
         async function handleStopCameraTracking() {
             if (!cameraSessionId) return;
             addLog('正在停止摄像头跟踪...', 'info');
@@ -765,7 +766,7 @@
                 });
                 cameraTrackingStatusSpan.textContent = '未跟踪';
                 stopCameraTrackingBtn.disabled = true;
-                startCameraTrackingBtn.disabled = cameraBBox ? false : true; // Can restart if ROI exists
+                startCameraTrackingBtn.disabled = cameraBBox ? false : true; 
                 addLog('摄像头跟踪已停止', 'success');
                 showToast('摄像头跟踪已停止', 'success');
             } catch (error) {
@@ -775,7 +776,7 @@
         }
 
 
-        // --- Video File Tracking Functions ---
+        // ROI选择初始化
         async function handleVideoUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -792,14 +793,14 @@
 
                 videoPreviewEl.src = URL.createObjectURL(file);
                 videoPreviewEl.style.display = 'block';
-                videoPreviewForSelectionImg.style.display = 'none'; // Ensure this is hidden
+                videoPreviewForSelectionImg.style.display = 'none'; 
                 videoPlaceholderDiv.style.display = 'none';
                 
                 videoFileStatusSpan.textContent = '已上传';
                 extractFrameBtn.disabled = false;
-                startVideoProcessingBtn.disabled = true; // Requires ROI
+                startVideoProcessingBtn.disabled = true; 
                 downloadResultBtn.disabled = true;
-                videoBBox = null; // Reset previous video ROI
+                videoBBox = null; 
                 videoTargetInfoSpan.textContent = '未选择';
 
 
@@ -812,12 +813,13 @@
             }
         }
         
+        // 提取帧并选择目标区域
         function handleExtractFrameForSelection() {
             if (!videoPreviewEl.src || videoPreviewEl.paused === false) {
                  videoPreviewEl.pause();
             }
             
-            // Draw current video frame to the image element for selection
+            // 确保视频已准备好
             const canvas = document.createElement('canvas');
             canvas.width = videoPreviewEl.videoWidth;
             canvas.height = videoPreviewEl.videoHeight;
@@ -825,20 +827,20 @@
             ctx.drawImage(videoPreviewEl, 0, 0, canvas.width, canvas.height);
             videoPreviewForSelectionImg.src = canvas.toDataURL();
             
-            videoPreviewEl.style.display = 'none'; // Hide video
-            videoPreviewForSelectionImg.style.display = 'block'; // Show image
+            videoPreviewEl.style.display = 'none';
+            videoPreviewForSelectionImg.style.display = 'block';
             
-            videoSelectionAreaDiv.style.left = '0px'; // Reset position
+            videoSelectionAreaDiv.style.left = '0px';
             videoSelectionAreaDiv.style.top = '0px';
             videoSelectionAreaDiv.style.width = '0px';
             videoSelectionAreaDiv.style.height = '0px';
             
             addLog('帧已提取，请在图像上选择目标区域.', 'info');
             showToast('请选择目标区域', 'info');
-            initializeROISelection('video'); // Setup selection for video on the image
+            initializeROISelection('video');
         }
 
-
+        // 视频处理函数
         async function handleStartVideoProcessing() {
             if (!uploadedVideoInfo || !videoBBox) {
                 showToast('请上传视频并选择跟踪目标', 'error');
@@ -849,7 +851,7 @@
             videoProgressFillDiv.style.width = '0%';
             videoProgressTextSpan.textContent = '0%';
             startVideoProcessingBtn.disabled = true;
-            extractFrameBtn.disabled = true; // Disable while processing
+            extractFrameBtn.disabled = true;
 
             try {
                 const response = await fetch(`${API_BASE}/start_tracking`, {
@@ -870,11 +872,12 @@
                 addLog(`启动视频处理失败: ${error.message}`, 'error');
                 showToast(`启动视频处理失败: ${error.message}`, 'error');
                 videoProgressContainerDiv.style.display = 'none';
-                startVideoProcessingBtn.disabled = false; // Re-enable
+                startVideoProcessingBtn.disabled = false;
                 extractFrameBtn.disabled = false;
             }
         }
 
+        // 轮询视频处理状态
         async function pollVideoProcessingStatus() {
             if (!videoProcessingTaskId) return;
             try {
@@ -892,7 +895,7 @@
                     showToast('视频处理完成!', 'success');
                     videoProgressTextSpan.textContent = '完成';
                     downloadResultBtn.disabled = false;
-                    extractFrameBtn.disabled = false; // Re-enable
+                    extractFrameBtn.disabled = false; 
                 } else if (status.status === 'error') {
                     throw new Error(status.error || '处理过程中发生未知错误');
                 }
@@ -901,11 +904,12 @@
                 showToast(`视频处理错误: ${error.message}`, 'error');
                 videoProgressTextSpan.textContent = '错误';
                 videoProgressContainerDiv.style.display = 'none';
-                startVideoProcessingBtn.disabled = false; // Re-enable
+                startVideoProcessingBtn.disabled = false;
                 extractFrameBtn.disabled = false;
             }
         }
 
+        // 下载结果
         async function handleDownloadResult() {
             if (!videoProcessingTaskId) return;
             addLog('准备下载结果...', 'info');
@@ -929,33 +933,31 @@
             }
         }
 
-        // --- ROI Selection Logic ---
+        // 初始化 ROI 选择
         let selectionRect = { startX: 0, startY: 0, currentX: 0, currentY: 0 };
         let isDrawingSelection = false;
         
-        function initializeROISelection(context) { // context is 'camera' or 'video'
-            isSelectingMode = context; // Set current selection context
+        function initializeROISelection(context) { 
+            isSelectingMode = context; 
             
             const mediaContainer = (context === 'camera') ? cameraFeedContainer : videoPlayerContainer;
-            const mediaElement = (context === 'camera') ? cameraStreamImg : videoPreviewForSelectionImg; // Select on the static image for video
+            const mediaElement = (context === 'camera') ? cameraStreamImg : videoPreviewForSelectionImg;
             const selectionAreaDiv = (context === 'camera') ? cameraSelectionAreaDiv : videoSelectionAreaDiv;
 
-            // Make selection area interactive for this context
-            selectionAreaDiv.style.pointerEvents = 'none'; // The container will handle mouse events
+            selectionAreaDiv.style.pointerEvents = 'none';
             mediaContainer.style.cursor = 'crosshair';
 
-            // Remove previous listeners to avoid duplication if called multiple times
             mediaContainer.onmousedown = null;
             mediaContainer.onmousemove = null;
             mediaContainer.onmouseup = null;
             mediaContainer.onmouseleave = null;
 
-
+            // 鼠标按下时开始选择
             mediaContainer.onmousedown = (e) => {
-                if (isSelectingMode !== context) return; // Only act if in the correct context
+                if (isSelectingMode !== context) return; 
                 e.preventDefault();
                 isDrawingSelection = true;
-                const rect = mediaElement.getBoundingClientRect(); // Use media element for offset calculation
+                const rect = mediaElement.getBoundingClientRect(); 
                 selectionRect.startX = e.clientX - rect.left;
                 selectionRect.startY = e.clientY - rect.top;
                 
@@ -966,6 +968,7 @@
                 selectionAreaDiv.style.display = 'block';
             };
 
+            // 鼠标移动时更新选择框
             mediaContainer.onmousemove = (e) => {
                 if (!isDrawingSelection || isSelectingMode !== context) return;
                 const rect = mediaElement.getBoundingClientRect();
@@ -983,6 +986,7 @@
                 selectionAreaDiv.style.height = `${height}px`;
             };
 
+            // 鼠标抬起时完成选择
             mediaContainer.onmouseup = (e) => {
                 if (!isDrawingSelection || isSelectingMode !== context) return;
                 isDrawingSelection = false;
@@ -997,14 +1001,13 @@
                 const selWidth = Math.abs(selectionRect.startX - finalX);
                 const selHeight = Math.abs(selectionRect.startY - finalY);
 
-                if (selWidth < 10 || selHeight < 10) { // Min selection size
+                if (selWidth < 10 || selHeight < 10) {
                     selectionAreaDiv.style.display = 'none';
                     showToast('选择区域太小', 'error');
                     if (context === 'camera') cameraBBox = null; else videoBBox = null;
                     return;
                 }
-                
-                // Scale bbox to original media dimensions
+
                 const scaleX = (mediaElement.naturalWidth || mediaElement.videoWidth) / mediaElement.clientWidth;
                 const scaleY = (mediaElement.naturalHeight || mediaElement.videoHeight) / mediaElement.clientHeight;
 
@@ -1020,20 +1023,20 @@
                     cameraTargetInfoSpan.textContent = `X:${bbox.x}, Y:${bbox.y}, W:${bbox.width}, H:${bbox.height}`;
                     startCameraTrackingBtn.disabled = false;
                     addLog(`摄像头目标选择: ${JSON.stringify(bbox)}`, 'info');
-                } else { // video context
+                } else { 
                     videoBBox = bbox;
                     videoTargetInfoSpan.textContent = `X:${bbox.x}, Y:${bbox.y}, W:${bbox.width}, H:${bbox.height}`;
                     startVideoProcessingBtn.disabled = false;
                     addLog(`视频目标选择: ${JSON.stringify(bbox)}`, 'info');
-                    // After selection, hide the image and show video player again for video
                     videoPreviewForSelectionImg.style.display = 'none';
                     videoPreviewEl.style.display = 'block';
-                    selectionAreaDiv.style.display = 'none'; // Hide selection box for video context
+                    selectionAreaDiv.style.display = 'none'; 
                 }
                 showToast('目标已选择!', 'success');
             };
             
-            mediaContainer.onmouseleave = (e) => { // If mouse leaves while drawing
+            // 鼠标移出时取消选择
+            mediaContainer.onmouseleave = (e) => {
                 if (isDrawingSelection && isSelectingMode === context) {
                     isDrawingSelection = false;
                      mediaContainer.style.cursor = 'default';
