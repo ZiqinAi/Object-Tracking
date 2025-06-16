@@ -83,7 +83,7 @@ class ObjectTracker:
     def initialize(self, frame, bbox):
         if self.algorithm == 'mosse':
             # 使用自定义MOSSE跟踪器
-            self.custom_mosse = MOSSETracker(learning_rate=0.125, sigma=2.0)
+            self.custom_mosse = MOSSETracker(learning_rate=0.25, sigma=2.0)
             bbox_tuple = (int(bbox['x']), int(bbox['y']), int(bbox['width']), int(bbox['height']))
             try:
                 self.initialized = self.custom_mosse.init(frame, bbox_tuple)
@@ -198,10 +198,9 @@ class CameraSession:
         self.fps = 30
         self.width = 640
         self.height = 480
-        # 添加轨迹相关属性
-        self.trajectory = []  # 存储轨迹点
-        self.max_trajectory_length = 50  # 最大轨迹长度
-        self.show_trajectory = True  # 是否显示轨迹
+        self.trajectory = [] 
+        self.max_trajectory_length = 30 
+        self.show_trajectory = True
         
     def start_camera(self):
         """启动摄像头"""
@@ -704,7 +703,8 @@ def get_camera_status(session_id):
         }
     })
 
-# ==================== 视频方面API ====================
+
+# ==================== 视频跟踪相关API ====================
 @app.route('/api/upload', methods=['POST'])
 def upload_video():
     """上传视频文件"""
