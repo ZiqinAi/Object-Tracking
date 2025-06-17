@@ -14,11 +14,11 @@ import base64
 from io import BytesIO
 import queue
 from MOSSE import MOSSETracker  # 导入自定义MOSSE跟踪器
-# from KCF import KCFTracker  # 导入自定义KCF跟踪器
-# from CSRT import CSRTTracker  # 导入自定义CSRT跟踪器
+from KCF import KCFTracker  # 导入自定义KCF跟踪器
+from CSRT import CSRTTracker  # 导入自定义CSRT跟踪器
 from TLD import TLDTracker  # 导入自定义TLD跟踪器
 from Boostingtracking import BoostingTracker  # 导入自定义Boosting跟踪器
-# from MIL import MILTracker  # 导入自定义MIL跟踪器
+from MIL import MILTracker  # 导入自定义MIL跟踪器
 
 
 app = Flask(__name__)
@@ -58,16 +58,26 @@ class ObjectTracker:
                 self.custom_mosse = MOSSETracker(learning_rate=0.125, sigma=2.0)
                 return True
             elif self.algorithm == 'kcf':
-                tracker = cv2.legacy.TrackerKCF_create()
+                # 使用自定义KCF跟踪器
+                print("使用自定义KCF跟踪器")
+                self.custom_kcf = KCFTracker()
+                return True
             elif self.algorithm == 'csrt':
-                tracker = cv2.legacy.TrackerCSRT_create()
+                # 使用自定义CSRT跟踪器
+                print("使用自定义CSRT跟踪器")
+                self.custom_csrt = CSRTTracker()
+                return True
             elif self.algorithm == 'mil':
-                tracker = cv2.legacy.TrackerMIL_create()
+                # 使用自定义MIL跟踪器
+                print("使用自定义MIL跟踪器")
+                self.custom_mil = MILTracker()
+                return True
             elif self.algorithm == 'boosting':
                 print("使用自定义Boosting跟踪器")
                 self.custom_boosting = BoostingTracker()
                 return True
             elif self.algorithm == 'tld':
+                # 使用自定义TLD跟踪器
                 print("使用自定义TLD跟踪器")
                 self.custom_tld = TLDTracker()
                 return True
@@ -131,6 +141,61 @@ class ObjectTracker:
             except Exception as e:
                 print(f"自定义TLD跟踪器初始化时发生错误: {e}")
         
+        elif self.algorithm == 'kcf':
+            # 使用自定义KCF跟踪器
+            print("使用自定义KCF跟踪器")
+            self.custom_kcf = KCFTracker()
+            bbox_tuple = (int(bbox['x']), int(bbox['y']), int(bbox['width']), int(bbox['height']))
+            try:
+                self.initialized = self.custom_kcf.init(frame, bbox_tuple)
+                if not self.initialized:
+                    print("自定义KCF跟踪器初始化失败")
+                    print("图像尺寸:", frame.shape)
+                    print("初始框:", bbox)
+                else:
+                    print("自定义KCF跟踪器初始化成功")
+                return self.initialized
+            except Exception as e:
+                print(f"自定义KCF跟踪器初始化时发生错误: {e}")
+                return False
+
+        elif self.algorithm == 'csrt':
+            # 使用自定义CSRT跟踪器
+            print("使用自定义CSRT跟踪器")
+            self.custom_csrt = CSRTTracker()
+            bbox_tuple = (int(bbox['x']), int(bbox['y']), int(bbox['width']), int(bbox['height']))
+            try:
+                self.initialized = self.custom_csrt.init(frame, bbox_tuple)
+                if not self.initialized:
+                    print("自定义CSRT跟踪器初始化失败")
+                    print("图像尺寸:", frame.shape)
+                    print("初始框:", bbox)
+                else:
+                    print("自定义CSRT跟踪器初始化成功")
+                return self.initialized
+            except Exception as e:
+                print(f"自定义CSRT跟踪器初始化时发生错误: {e}")
+                return False
+        
+        elif self.algorithm == 'mil':
+            # 使用自定义MIL跟踪器
+            print("使用自定义MIL跟踪器")
+            self.custom_mil = MILTracker()
+            bbox_tuple = (int(bbox['x']), int(bbox['y']), int(bbox['width']), int(bbox['height']))
+            try:
+                self.initialized = self.custom_mil.init(frame, bbox_tuple)
+                if not self.initialized:
+                    print("自定义MIL跟踪器初始化失败")
+                    print("图像尺寸:", frame.shape)
+                    print("初始框:", bbox)
+                else:
+                    print("自定义MIL跟踪器初始化成功")
+                return self.initialized
+            except Exception as e:
+                print(f"自定义MIL跟踪器初始化时发生错误: {e}")
+                return False
+
+
         else:
             # 使用OpenCV跟踪器
             self.tracker = self.create_tracker()
@@ -169,6 +234,18 @@ class ObjectTracker:
         elif self.algorithm == 'tld':
             # 使用自定义TLD跟踪器
             success, bbox = self.custom_tld.update(frame)
+            return success, bbox
+        elif self.algorithm == 'kcf':
+            # 使用自定义KCF跟踪器
+            success, bbox = self.custom_kcf.update(frame)
+            return success, bbox
+        elif self.algorithm == 'csrt':
+            # 使用自定义CSRT跟踪器
+            success, bbox = self.custom_csrt.update(frame)
+            return success, bbox
+        elif self.algorithm == 'mil':
+            # 使用自定义MIL跟踪器
+            success, bbox = self.custom_mil.update(frame)
             return success, bbox
         else:
             # 使用OpenCV跟踪器
